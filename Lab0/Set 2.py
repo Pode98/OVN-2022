@@ -43,3 +43,15 @@ for i in range(1, chunk_size + 1):
         end += chunk_size
     else:
         end = length - chunk_size
+
+# Exercise 4
+list1 = [2, 3, 4, 5, 6, 7, 8]
+list2 = [4, 9, 16, 25, 36, 49, 64]
+print("First list: ", list1)
+print("Second list: ", list2)
+list3 = zip(list1, list2)
+result_set = set(list3)
+print(result_set)
+
+# Exercise 5
+
