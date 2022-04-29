@@ -9,7 +9,7 @@ list2 = [4, 8, 12, 16, 20, 24, 28, 55]
 print("List1 with only odd indexs: ", list1[1::2])
 print("List2 with only even indexs: ", list2[::2])
 list3 = []
-i=0;
+i = 0
 while i < int(len(list1)):
     list3.append(list2[i])
     list3.append(list1[i+1])
@@ -45,6 +45,18 @@ for i in range(1, chunk_size + 1):
         end = length - chunk_size
 
 # Exercise 4
+sample_list = [11, 45, 8, 11, 23, 45, 23, 45, 89]
+print("Original list", sample_list)
+count_dict = dict()
+for item in sample_list:
+    if item in count_dict:
+        count_dict[item] += 1
+    else:
+        count_dict[item] = 1
+print("Printing count of each item", count_dict)
+
+
+# Exercise 5
 list1 = [2, 3, 4, 5, 6, 7, 8]
 list2 = [4, 9, 16, 25, 36, 49, 64]
 print("First list: ", list1)
@@ -53,5 +65,25 @@ list3 = zip(list1, list2)
 result_set = set(list3)
 print(result_set)
 
-# Exercise 5
+# Exercise 6
+set1 = {23, 42, 65, 57, 78, 83, 29}
+set2 = {57, 83, 29, 67, 73, 43, 48}
+intersection = set1.intersection(set2)
+for item in intersection:
+    set1.remove(item)
+
+# Exercise 7
+set1 = {57, 83, 29}
+set2 = {57, 83, 29, 67, 73, 43, 48}
+if set1.issubset(set2):
+    set2.clear()
+elif set2.issubset(set1):
+    set1.clear()
+print("The first set is: ", set1)
+print("The second set is: ", set2)
+
+# Exercise 8
+
+roll_number = [47, 64, 69, 37, 76, 83, 95, 97]
+sample_dict = {"Jhon": 47, "Emma": 69, "Kelly": 76, "Jason": 97}
 
