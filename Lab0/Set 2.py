@@ -86,4 +86,28 @@ print("The second set is: ", set2)
 
 roll_number = [47, 64, 69, 37, 76, 83, 95, 97]
 sample_dict = {"Jhon": 47, "Emma": 69, "Kelly": 76, "Jason": 97}
+print("List -", roll_number)
+print("Dictionary -", sample_dict)
+roll_number[:] = [item for item in roll_number if item in sample_dict.values()]
+print("After removing unwanted elements from list", roll_number)
+
+# Exercise 9
+speed = {"jan": 47, "feb": 52, "march": 47, "April": 44, "May": 52, "June": 53, "july": 54, "Aug": 44, "Sept": 54}
+print("Dictionary\"s values -", speed.values())
+speed_list = list()
+for item in speed.values():
+    if item not in speed_list: speed_list.append(item)
+print("Unique list", speed_list)
+
+
+# Exercise 10
+sample_list = [87, 52, 44, 53, 54, 87, 52, 53]
+print("Original list", sample_list)
+sample_list = list(set(sample_list))
+print("Unique list", sample_list)
+tup = tuple(sample_list)
+print("Tuple", tup)
+print("Minimum number is:", min(tup))
+print("Maximum number is:", max(tup))
+
 
