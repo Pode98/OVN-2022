@@ -1,8 +1,11 @@
 import pandas as pd
-
 from core.elements import *
+#from pathlib import Path
+#root = Path(__file__).parent
+#folder = str(root) + '\\resources'
+#file = str(folder) + '\\nodes.json'
 
-network = Network('nodes.json')
+network = Network('C:\Users\aless\PycharmProjects\OVN-2022\resources\nodes.json')
 network.connect()
 # Creo tutte le possibili coppie di nodi
 node_labels = network.nodes.keys()
@@ -10,8 +13,7 @@ pairs = []
 for label1 in node_labels:
     for label2 in node_labels:
         if label2 != label1:
-            pairs.append(label1+label2)
-
+            pairs.append(label1 + label2)
 
 # Creo il Dataframe e definisco la struttura
 columns = ['path', 'latency', 'noise', 'snr']
@@ -34,16 +36,16 @@ for pair in pairs:
         # e per ogni path, riscrivo ogni nodo come mi è richiesto dall'es ovvero con nodo->next nodo
 
         # Ora propago
-        signal_information = SignalInformation(1, path) # power = 1
-        signal_information = network.propagate(signal_information) # dopo questo step avrò il signal coi valori finali
+        signal_information = SignalInformation(1, path)  # power = 1
+        signal_information = network.propagate(signal_information)  # dopo questo step avrò il signal coi valori finali
         # Non mi resta che salvare i valori e passare al prossimo percorso
         # ed una volta finito i percorsi, passare alla prossima coppia
         latencies.append(signal_information.latency)
         noises.append(signal_information.noise_power)
-        snrs.append(10 * np.log10(signal_information.signal_power/signal_information.noise_power)) # formula data dal testo
+        snrs.append(
+            10 * np.log10(signal_information.signal_power / signal_information.noise_power))  # formula data dal testo
 
 df['paths'] = paths
 df['latency'] = latencies
 df['noise'] = noises
 df['snr'] = snrs
-
