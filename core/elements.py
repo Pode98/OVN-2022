@@ -102,8 +102,8 @@ class Node(object):
 
 class Line (object):
     def __init__ (self, line_dict):
-        self._label = line_dict['label ']
-        self._length = line_dict['length ']
+        self._label = line_dict['label']
+        self._length = line_dict['length']
         self._successive = {}
 
     @property
@@ -229,7 +229,7 @@ class Network(object):
         paths = []
         for i in range(len(cross_nodes)+1):
             for path in inner_paths[str(i)]:
-                if path[-1] + label2 in cross_lines: paths.appennd(path + label2)
+                if path[-1] + label2 in cross_lines: paths.append(path + label2)
 
         return paths
 

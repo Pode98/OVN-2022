@@ -5,7 +5,7 @@ from core.elements import *
 #folder = str(root) + '\\resources'
 #file = str(folder) + '\\nodes.json'
 
-network = Network('C:\Users\aless\PycharmProjects\OVN-2022\resources\nodes.json')
+network = Network('/Users/alessiopodesta/PycharmProjects/OVN-2022/resources/nodes.json')
 network.connect()
 # Creo tutte le possibili coppie di nodi
 node_labels = network.nodes.keys()
@@ -26,7 +26,7 @@ noises = []
 snrs = []
 
 for pair in pairs:
-    for path in network.find_paths(pair[0], path[1]):
+    for path in network.find_paths(pair[0], pair[1]):
         path_string = ''
         for node in path:
             path_string += node + '->'
