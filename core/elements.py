@@ -3,6 +3,7 @@ import numpy
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.constants import c
+import pandas as pd
 
 class SignalInformation(object):
     def __init__(self, power, path):
@@ -149,6 +150,7 @@ class Network(object):
         node_json = json.load(open(json_path, "r"))
         self._nodes = {}
         self._lines = {}
+        self._weighted_paths = None
         for node_label in node_json:
             #Creo l'istanza del nodo
             node_dict = node_json[node_label]
@@ -179,6 +181,58 @@ class Network(object):
     @property
     def lines(self):
         return self._lines
+
+    @property
+    def weighted_paths(self):
+        return self._weighted_paths
+
+    @weighted_paths.setter
+    def set_weighted_paths(self, signal_power):  # Copiato da main precedente da rileggere per favore
+        node_labels = self.nodes.keys()
+        pairs = []
+        for label1 in node_labels:
+            for label2 in node_labels:
+                if label2 != label1:
+                    pairs.append(label1 + label2)
+
+        # Creo il Dataframe e definisco la struttura
+        columns = ['path', 'latency', 'noise', 'snr']
+        df = pd.DataFrame()
+
+        # Inizializzo vettori risultato
+        paths = []
+        latencies = []
+        noises = []
+        snrs = []
+
+        for pair in pairs:
+            for path in self.find_paths(pair[0], pair[1]):
+                path_string = ''
+                for node in path:
+                    path_string += node + '->'
+                paths.append(path_string[:-2])
+
+                # Ho costruito la prima parte del dataframe: per ogni coppia, guardo tutti i path possibili
+                # e per ogni path, riscrivo ogni nodo come mi è richiesto dall'es ovvero con nodo->next nodo
+
+                # Ora propago
+                signal_information = SignalInformation(1, path)  # power = 1
+                signal_information = self.propagate(
+                    signal_information)  # dopo questo step avrò il signal coi valori finali
+                # Non mi resta che salvare i valori e passare al prossimo percorso
+                # ed una volta finito i percorsi, passare alla prossima coppia
+                latencies.append(signal_information.latency)
+                noises.append(signal_information.noise_power)
+                snrs.append(
+                    10 * np.log10(
+                        signal_information.signal_power / signal_information.noise_power))  # formula data dal testo
+
+        df['paths'] = paths
+        df['latency'] = latencies
+        df['noise'] = noises
+        df['snr'] = snrs
+        self.weighted_paths = df
+
 
     def draw(self):
         nodes = self.nodes
@@ -232,5 +286,59 @@ class Network(object):
                 if path[-1] + label2 in cross_lines: paths.append(path + label2)
 
         return paths
+
+    def find_best_snr(self, input_node, output_node):
+        all_paths = self.weighted_paths.path.values
+        inout_paths = [path for path in all_paths
+               if ((path[0] == input_node) and (path[-1] == output_node))]
+        inout_df = self.weighted_paths.loc[self.weighted_paths.path.isin(inout_paths)]
+        best_snr = np.max(inout_df.snr.values)
+        best_path = inout_df.loc[inout_df.snr == best_snr].path.values[0].replace('->', '')
+        return best_path
+
+    def find_best_latency(self, input_node, output_node):
+        all_paths = self.weighted_paths.path.values
+        inout_paths = [path for path in all_paths
+               if ((path[0] == input_node) and (path[-1] == output_node))]
+        inout_df = self.weighted_paths.loc[self.weighted_paths.path.isin(inout_paths)]
+        best_latency = np.min(inout_df.latency.values)
+        best_path = inout_df.loc[inout_df.latency == best_latency].path.values[0].replace('->', '')
+        return best_path
+
+class Connection(object):
+    def __init__(self, input_node, output_node, signal_power):
+        self._input_node = input_node
+        self._ouput_node = output_node
+        self._signal_power = signal_power
+        self._latency = 0
+        self._snr = 0
+
+    @property
+    def input_node(self):
+        return self._input_node
+
+    @property
+    def ouput_node(self):
+        return self._ouput_node
+
+    @property
+    def signal_power(self):
+        return self._signal_power
+
+    @property
+    def latency(self):
+        return self._latency
+
+    @latency.setter
+    def latency(self, latency):
+        self._latency = latency
+
+    @property
+    def snr(self):
+        return self._snr
+
+    @snr.setter
+    def snr(self, snr):
+        self._snr = snr
 
 
