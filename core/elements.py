@@ -305,6 +305,31 @@ class Network(object):
         best_path = inout_df.loc[inout_df.latency == best_latency].path.values[0].replace('->', '')
         return best_path
 
+    def stream(self, connections, best='latency'):
+        streamed_connections = []
+        for connection in connections:
+            input_node = connection.input_node
+            output_node = connection.output_node
+            signal_power = connection.signal_power
+            self.set_weighted_paths(signal_power)
+            if best == 'latency':
+                path = self.find_best_latency(input_node, output_node)
+            elif best == 'snr':
+                path = self.find_best_snr(input_node, output_node)
+            else:
+                print('ERROR: bestinput not recognized.Value:', best)
+                continue
+
+            in_signal_information = SignalInformation(signal_power, path)
+            out_signal_information = self.propagate(in_signal_information)
+            connection.latency = out_signal_information.latency
+            noise = out_signal_information.noise_power
+            connection.snr = 10 * np.log10(signal_power / noise)
+            streamed_connections.append(connection)
+
+        return streamed_connections
+
+
 class Connection(object):
     def __init__(self, input_node, output_node, signal_power):
         self._input_node = input_node
