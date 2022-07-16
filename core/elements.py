@@ -166,6 +166,7 @@ class Network(object):
         node_json = json.load(open(json_path, "r"))
         self._nodes = {}
         self._lines = {}
+        self._connected = False
         self._weighted_paths = None
         for node_label in node_json:
             #Creo l'istanza del nodo
@@ -202,8 +203,9 @@ class Network(object):
     def weighted_paths(self):
         return self._weighted_paths
 
-    @weighted_paths.setter
     def set_weighted_paths(self, signal_power):  # Copiato da main precedente da rileggere per favore
+        if not self.connected:
+            self.connect()
         node_labels = self.nodes.keys()
         pairs = []
         for label1 in node_labels:
@@ -232,9 +234,8 @@ class Network(object):
                 # e per ogni path, riscrivo ogni nodo come mi è richiesto dall'es ovvero con nodo->next nodo
 
                 # Ora propago
-                signal_information = SignalInformation(1, path)  # power = 1
-                signal_information = self.propagate(
-                    signal_information)  # dopo questo step avrò il signal coi valori finali
+                signal_information = SignalInformation(signal_power, path)  # power = 1
+                signal_information = self.propagate(signal_information)  # dopo questo step avrò il signal coi valori finali
                 # Non mi resta che salvare i valori e passare al prossimo percorso
                 # ed una volta finito i percorsi, passare alla prossima coppia
                 latencies.append(signal_information.latency)
@@ -248,7 +249,6 @@ class Network(object):
         df['noise'] = noises
         df['snr'] = snrs
         self.weighted_paths = df
-
 
     def draw(self):
         nodes = self.nodes
@@ -280,6 +280,8 @@ class Network(object):
                 line = lines_dict[line_label]
                 line.successive[connected_node] = nodes_dict[connected_node]
                 node.successive[line_label] = lines_dict[line_label]
+
+        self._connected = True
 
     def available_paths(self, input_node, output_node):
         if self.weighted_paths is None:

@@ -8,7 +8,7 @@ from core.elements import *
 #folder = str(root) + '\\resources'
 #file = str(folder) + '\\nodes.json'
 
-network = Network('nodes.json')
+network = Network('/Users/alessiopodesta/PycharmProjects/OVN-2022/resources/nodes.json')
 network.connect()
 node_labels = list(network.nodes.keys())
 connections = []
