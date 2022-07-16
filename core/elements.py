@@ -204,7 +204,7 @@ class Network(object):
         return self._weighted_paths
 
     def set_weighted_paths(self, signal_power):  # Copiato da main precedente da rileggere per favore
-        if not self.connected:
+        if not self._connected:
             self.connect()
         node_labels = self.nodes.keys()
         pairs = []
@@ -244,11 +244,11 @@ class Network(object):
                     10 * np.log10(
                         signal_information.signal_power / signal_information.noise_power))  # formula data dal testo
 
-        df['paths'] = paths
+        df['path'] = paths
         df['latency'] = latencies
         df['noise'] = noises
         df['snr'] = snrs
-        self.weighted_paths = df
+        self._weighted_paths = df
 
     def draw(self):
         nodes = self.nodes
@@ -264,10 +264,10 @@ class Network(object):
         plt.title('Network')
         plt.show()
 
-    def propagate(self, signal_information):
+    def propagate(self, signal_information, occupied = False):
         path = signal_information.path
         start = self.nodes[path[0]]
-        propagated_signal_information = start.propagate(signal_information)
+        propagated_signal_information = start.propagate(signal_information, occupied)
         return propagated_signal_information
 
     def connect(self):
@@ -373,7 +373,7 @@ class Network(object):
                 noise = out_signal_information.noise_power
                 connection.snr = 10 * np.log10(signal_power / noise)
             else:
-                connection.latency = None
+                connection.latency = 0
                 connection.snr = 0
             streamed_connections.append(connection)
 

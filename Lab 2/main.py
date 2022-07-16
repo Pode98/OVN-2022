@@ -17,7 +17,7 @@ for i in range(100):
     connection = Connection(node_labels[0], node_labels[-1], power)
     connections.append(connection)
 
-streamed_connections = network.stream(connections)
+streamed_connections = network.stream(connections, best='latency')
 latencies = [connection.latency for connection in streamed_connections]
 plt.hist(latencies, bins=10)
 plt.title('Latency Distribution')
