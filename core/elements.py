@@ -4,6 +4,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.constants import c
 import pandas as pd
+from scipy import special as math
+
+BER_t = 1e-3
+
+Bn = 12.5e9  # noise bandwidth
+
+Rs = 32e9  #lightpath symbol rate
 
 
 class Lightpath(object):
@@ -113,6 +120,7 @@ class Node(object):
         self._position = node['position']
         self._connected_nodes = node['connected_nodes']
         self._successive = {}
+        self._transceiver = ''
 
     def label(self):
         return self._label
@@ -143,6 +151,14 @@ class Node(object):
     @successive.setter
     def successive(self, successive):
         self._successive = successive
+
+    @property
+    def transceiver(self):
+        return self._transceiver
+
+    @transceiver.setter
+    def transceiver(self, value):
+        self._transceiver = value
 
     def propagate(self, lightpath, occupation=False):
         path = lightpath.path
@@ -250,7 +266,7 @@ class Line (object):
 
 
 class Network(object):
-    def __init__(self, json_path, num=10):
+    def __init__(self, json_path, num=10, transceiver='fixed_rate'):
         node_json = json.load(open(json_path, "r"))
         self._nodes = {}
         self._lines = {}
@@ -265,6 +281,12 @@ class Network(object):
             node_dict['label'] = node_label
             node = Node(node_dict)
             self._nodes[node_label] = node
+
+            if 'transceiver' not in node_json[node_label].keys():
+                # definisco la strategia leggendola o impostando uno standard
+                node.transceiver = transceiver
+            else:
+                node.transceiver = node_json[node_label]['transceiver']
 
             #Creo le istanze delle linee
             for connected_node_label in node_dict['connected_nodes']:
@@ -486,6 +508,15 @@ class Network(object):
                 # prendo la disponibilità di tutti i canali di quel path
                 channel = [i for i in range(len(path_occupancy)) if path_occupancy[i] == 'free'][0]
                 # Prendo il primo canale disponibile di quel path
+
+                lightpath = Lightpath(signal_power, path, channel)
+                path1 = lightpath.path
+                rb = self.calculate_bit_rate(path1, self.nodes[input_node].transceiver)
+                if rb == 0:
+                    continue
+                else:
+                    connection.bit_rate = rb
+
                 path = path.replace('->', '')
                 in_lightpath = Lightpath(signal_power, path, channel)
                 out_lightpath = self.propagate(in_lightpath, True)
@@ -515,6 +546,40 @@ class Network(object):
                 states[i] = 'occupied'
         self.route_space[str(channel)] = states
 
+    # da qua comincia il casino
+    def calculate_bit_rate(self, path, strategy):
+        global BER_t
+        # Rs = lightpath.Rs
+        global Bn
+        global Rs
+        # path = lightpath.path
+        Rb = 0
+        GSNR_db = pd.array(self.weighted_paths.loc[self.weighted_paths['path'] == path]['snr'])[0]
+        GSNR = 10 ** (GSNR_db / 10)
+
+        if strategy == 'fixed_rate':
+            if GSNR > 2 * math.erfcinv(2 * BER_t) ** 2 * (Rs / Bn):
+                Rb = 100
+            else:
+                Rb = 0
+
+        if strategy == 'flex_rate':
+            if GSNR < 2 * math.erfcinv(2 * BER_t) ** 2 * (Rs / Bn):
+                Rb = 0
+            elif (GSNR > 2 * math.erfcinv(2 * BER_t) ** 2 * (Rs / Bn)) & (GSNR < (14 / 3) * math.erfcinv(
+                    (3 / 2) * BER_t) ** 2 * (Rs / Bn)):
+                Rb = 100
+            elif (GSNR > (14 / 3) * math.erfcinv((3 / 2) * BER_t) ** 2 * (Rs / Bn)) & (GSNR < 10 * math.erfcinv(
+                    (8 / 3) * BER_t) ** 2 * (Rs / Bn)):
+                Rb = 200
+            elif GSNR > 10 * math.erfcinv((8 / 3) * BER_t) ** 2 * (Rs / Bn):
+                Rb = 400
+
+        if strategy == 'shannon':
+            Rb = 2 * Rs * np.log2(1 + Bn / Rs * GSNR) / 1e9
+
+        return Rb
+
 
 class Connection(object):
     def __init__(self, input_node, output_node, signal_power):
@@ -523,6 +588,7 @@ class Connection(object):
         self._signal_power = signal_power
         self._latency = 0
         self._snr = 0
+        self._bit_rate = 0
 
     @property
     def input_node(self):
@@ -551,5 +617,13 @@ class Connection(object):
     @snr.setter
     def snr(self, snr):
         self._snr = snr
+
+    @property
+    def bit_rate(self):
+        return self._bit_rate
+
+    @bit_rate.setter
+    def bit_rate(self, value):
+        self._bit_rate = value
 
 
