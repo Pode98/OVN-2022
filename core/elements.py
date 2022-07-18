@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.constants import c
 from scipy.constants import Planck
+from scipy.constants import h
 import pandas as pd
 from scipy import special as math
 
@@ -270,8 +271,9 @@ class Line(object):
         latency = self.length / (c * 2 / 3)
         return latency
 
-    def noise_generation(self, signal_power):
-        noise = signal_power / (2 * self.length)
+    def noise_generation(self, lightpath):
+        # noise = signal_power / (2 * self.length)
+        noise = self.ase_generation() + self.nli_generation(lightpath.signal_power, lightpath.df, lightpath.Rs)
         return noise
 
     def propagate(self, lightpath, occupation=False):
@@ -280,7 +282,14 @@ class Line(object):
         lightpath.add_latency(latency)
 
         # Update noise
-        signal_power = lightpath.signal_power
+        #signal_power = lightpath.signal_power
+        Nch = 10
+        rs = lightpath.Rs
+        Df = lightpath.df
+        eta = 16 / (27 * np.pi) * np.log(
+            np.pi ** 2 * self.beta * rs ** 2 * Nch ** (2 * rs / Df) / (2 * self.alpha)) * self.gamma ** 2 / (
+                      4 * self.alpha * self.beta * rs ** 3)
+        signal_power = self.optimized_launch_power(eta)
         noise = self.noise_generation(signal_power)
         lightpath.add_noise(noise)
 
@@ -325,12 +334,19 @@ class Line(object):
         Pch = signal_power
         N_spans = self._n_amplifiers
         b = self.beta
-        a = self.alpha
+        a = self.alpha / (20 * np.log10(np.e))
         eta = 16 / (27 * np.pi) * np.log(
             np.pi ** 2 * b * rs ** 2 * Nch ** (2 * rs / Df) / (2 * a)) * self.gamma ** 2 / (
                         4 * a * b * rs ** 3)
         nli_noise = N_spans * Bn * (Pch**3) * eta
         return nli_noise
+
+    def optimized_launch_power(self, eta):  # vedi teoriA
+        F = 10 ** (self.noise_figure / 10)  # linearizzazioni
+        G = 10 ** (self.gain / 10)
+        f0 = 193.414e12
+        olp = ((F * f0 * h * G) / (2 * eta)) ** (1 / 3)
+        return olp
 
 
 class Network(object):
@@ -615,12 +631,12 @@ class Network(object):
         self.route_space[str(channel)] = states
 
     # da qua comincia il casino
-    def calculate_bit_rate(self, path, strategy):
+    # def calculate_bit_rate(self, path, strategy):
+    def calculate_bit_rate(self, lightpath, strategy):
         global BER_t
-        # Rs = lightpath.Rs
+        Rs = lightpath.Rs
         global Bn
-        global Rs
-        # path = lightpath.path
+        path = lightpath.path
         Rb = 0
         GSNR_db = pd.array(self.weighted_paths.loc[self.weighted_paths['path'] == path]['snr'])[0]
         GSNR = 10 ** (GSNR_db / 10)
