@@ -214,11 +214,13 @@ class Line(object):
         self._successive = {}
         self._gain = 16
         self._noise_figure = 3
+        #self._noise_figure = 5 usare questo solo in lab8 es 9
         self._n_amplifiers = int(np.cell(self._length / 80))
 
         # Pysical parameters of the fiber
         self._alpha = 0.2e-3
         self._beta = 2.13e-26
+        #self._beta = 0.6e-26 usare questo solo in lab8 es 8
         self._gamma = 1.27e-3
 
     @property
