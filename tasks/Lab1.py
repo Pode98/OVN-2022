@@ -1,9 +1,9 @@
 import pandas as pd
 from core.elements import *
-#from pathlib import Path
-#root = Path(__file__).parent
-#folder = str(root) + '\\resources'
-#file = str(folder) + '\\nodes.json'
+# from pathlib import Path
+# root = Path(__file__).parent
+# folder = str(root) + '\\resources'
+# file = str(folder) + '\\nodes.json'
 
 network = Network('/Users/alessiopodesta/PycharmProjects/OVN-2022/resources/nodes.json')
 network.connect()

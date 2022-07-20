@@ -1,5 +1,4 @@
 from random import shuffle
-from random import shuffle
 import pandas as pd
 from core.elements import *
 import copy
@@ -114,13 +113,13 @@ def main():
     # total capacity _________________________________________________________________________
 
     # print("Average Latency: ", np.average(np.ma.masked_equal(latencies,0)))
-    print("Average SNR: ", np.average(np.ma.masked_equal(snrs,0)))
+    print("Average SNR: ", np.average(np.ma.masked_equal(snrs, 0)))
     print("Total Capacity Fixed-Rate:", np.sum(bit_rate_fixed_rate))
-    print("Average Capacity Fixed-Rate:", np.mean(np.ma.masked_equal(bit_rate_fixed_rate,0)))
+    print("Average Capacity Fixed-Rate:", np.mean(np.ma.masked_equal(bit_rate_fixed_rate, 0)))
     print("Total Capacity Flex-Rate:", np.sum(bit_rate_flex_rate))
-    print("Average Capacity Flex-Rate:", np.mean(np.ma.masked_equal(bit_rate_flex_rate,0)))
+    print("Average Capacity Flex-Rate:", np.mean(np.ma.masked_equal(bit_rate_flex_rate, 0)))
     print("Total Capacity Shannon:", np.sum(bit_rate_shannon).round(2))
-    print("Average Capacity Shannon:", np.mean(np.ma.masked_equal(bit_rate_shannon,0).round(2)))
+    print("Average Capacity Shannon:", np.mean(np.ma.masked_equal(bit_rate_shannon, 0).round(2)))
 
 
 if __name__ == "__main__":

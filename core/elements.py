@@ -77,6 +77,8 @@ class Lightpath(object):
         return self._df
 
 
+########################################## Signal Information ##########################################
+
 class SignalInformation(object):
     def __init__(self, power, path):
         self._sig_power = power
@@ -125,6 +127,8 @@ class SignalInformation(object):
         self.path = self.path[1:]
 
 
+########################################## Node ######################################################
+
 class Node(object):
     def __init__(self, node):
         self._label = node['label']
@@ -132,6 +136,7 @@ class Node(object):
         self._connected_nodes = node['connected_nodes']
         self._successive = {}
         self._transceiver = ''
+        self._switching_matrix = None #Lab8, matrice di nodi contenente bitrate dei percorsi che li collega
 
     def label(self):
         return self._label
@@ -171,6 +176,14 @@ class Node(object):
     def transceiver(self, value):
         self._transceiver = value
 
+    @property
+    def switching_matrix(self):
+        return self._switching_matrix
+
+    @switching_matrix.setter
+    def switching_matrix(self, value):
+        self._switching_matrix = value
+
     def propagate(self, lightpath, occupation=False):
         path = lightpath.path
         if len(path) > 1:
@@ -189,6 +202,8 @@ class Node(object):
             lightpath = line.probe(lightpath)
         return lightpath
 
+
+################################## Line @########################################################
 
 class Line(object):
     def __init__(self, line_dict, num=10):
@@ -290,6 +305,7 @@ class Line(object):
             np.pi ** 2 * self.beta * rs ** 2 * Nch ** (2 * rs / Df) / (2 * self.alpha)) * self.gamma ** 2 / (
                       4 * self.alpha * self.beta * rs ** 3)
         signal_power = self.optimized_launch_power(eta)
+        lightpath.set_signal_power(signal_power)
         noise = self.noise_generation(signal_power)
         lightpath.add_noise(noise)
 
@@ -341,13 +357,15 @@ class Line(object):
         nli_noise = N_spans * Bn * (Pch**3) * eta
         return nli_noise
 
-    def optimized_launch_power(self, eta):  # vedi teoriA
+    def optimized_launch_power(self, eta):  # ricontrollare
         F = 10 ** (self.noise_figure / 10)  # linearizzazioni
         G = 10 ** (self.gain / 10)
         f0 = 193.414e12
         olp = ((F * f0 * h * G) / (2 * eta)) ** (1 / 3)
         return olp
 
+
+################################### Network ################################################
 
 class Network(object):
     def __init__(self, json_path, num=10, transceiver='fixed_rate'):
@@ -436,8 +454,17 @@ class Network(object):
 
                 # Ora propago
                 signal_information = SignalInformation(signal_power, path)
-                signal_information = self.propagate(
-                    signal_information)  # dopo questo step avrò il signal coi valori finali
+                if pair in self.lines.keys():
+                    line = self.lines[pair]
+                    # calcolare eta ed effettuare l'optimized launch power
+                    a = line.alpha / (20 * np.log10(np.e))
+                    eta = 16 / (27 * np.pi) * np.log(
+                        np.pi ** 2 * line.beta * Rs ** 2 * 10 ** (2 * rs / df) / (2 * a)) * line.gamma ** 2 / (
+                                  4 * a * line.beta * Rs ** 3)
+                    s_power = line.optimized_launch_power(line.eta_nli(signal_information.df, signal_information.Rs))
+                signal_information.set_signal_power(s_power)
+
+                signal_information = self.propagate(signal_information)  # dopo questo step avrò il signal coi valori finali
                 # Non mi resta che salvare i valori e passare al prossimo percorso
                 # ed una volta finito i percorsi, passare alla prossima coppia
                 latencies.append(signal_information.latency)
@@ -488,14 +515,24 @@ class Network(object):
     def connect(self):
         nodes_dict = self.nodes
         lines_dict = self.lines
+        switching_matrix = {}
         for node_label in nodes_dict:
             node = nodes_dict[node_label]
             for connected_node in node.connected_nodes:
+                # understandable have a nice day
+                inner_dict = {connected_node: np.zeros(10)}
+                for connected_node2 in node.connected_nodes:
+                    if connected_node2 != connected_node:
+                        dict_tmp = {connected_node2: np.ones(10)}
+                        inner_dict.update(dict_tmp)
+                switching_matrix.update({connected_node: inner_dict})
+
                 line_label = node_label + connected_node
                 line = lines_dict[line_label]
                 line.successive[connected_node] = nodes_dict[connected_node]
                 node.successive[line_label] = lines_dict[line_label]
-
+            node.switching_matrix = switching_matrix
+            switching_matrix = {}
         self._connected = True
 
     def available_paths(self, input_node, output_node):
@@ -594,8 +631,8 @@ class Network(object):
                 # Prendo il primo canale disponibile di quel path
 
                 lightpath = Lightpath(signal_power, path, channel)
-                path1 = lightpath.path
-                rb = self.calculate_bit_rate(path1, self.nodes[input_node].transceiver)
+                #path1 = lightpath.path
+                rb = self.calculate_bit_rate(lightpath, self.nodes[input_node].transceiver)
                 if rb == 0:
                     continue
                 else:
@@ -607,6 +644,7 @@ class Network(object):
                 connection.latency = out_lightpath.latency
                 noise = out_lightpath.noise_power
                 connection.snr = 10 * np.log10(signal_power / noise)
+                self.update_route_space(path, channel) # Lab8
             else:
                 connection.latency = 0
                 connection.snr = 0
@@ -619,6 +657,22 @@ class Network(object):
         path = path.replace('->', '')
         return set([path[i] + path[i + 1] for i in range(len(path) - 1)])
 
+
+    @staticmethod
+    def line_set_to_path(line_set):
+        path = ""
+        elements = list(itertools.permutations(list(line_set), len(list(line_set))))
+        for i in range(len(elements)):
+            flag = 1
+            for j in range(len(elements[i]) - 1):
+                if elements[i][j][1] != elements[i][j + 1][0]:
+                    flag = 0
+                j += 2
+            if flag == 1:
+                for j in range(len(elements[i])):
+                    path += elements[i][j][0]
+                return path
+
     def update_route_space(self, path, channel):
         all_paths = [self.path_to_line_set(p)
                      for p in self.route_space.path.values]
@@ -628,6 +682,17 @@ class Network(object):
             line_set = all_paths[i]
             if lines.intersection(line_set):
                 states[i] = 'occupied'
+
+                path_to_update = self.line_set_to_path(line_set)
+
+                for j in range(len(path_to_update)):
+                    if j not in (0, len(path_to_update) - 1):
+                        if ((path_to_update[j - 1] in self.nodes[path_to_update[j]].connected_nodes) & (
+                                path_to_update[j + 1] in self.nodes[path_to_update[j]].connected_nodes)):
+                            self.nodes[path_to_update[j]].switching_matrix[path_to_update[j - 1]][
+                                path_to_update[j + 1]][
+                                channel] = 0
+
         self.route_space[str(channel)] = states
 
     # da qua comincia il casino
@@ -664,6 +729,27 @@ class Network(object):
 
         return Rb
 
+    # Lab 8 stuff
+    def node_to_number(self, str):
+        nodes = list(self.nodes.keys())
+        nodes.sort()
+        return nodes.index(str)
+
+    def upgrade_traffic_matrix(self, mtx, nodeA, nodeB):
+        A = self.node_to_number(nodeA)
+        B = self.node_to_number(nodeB)
+        connection = Connection(nodeA, nodeB, 1) # controllare che sig_power è richiesto
+        list_con = [connection]
+        self.stream(list_con)
+        btr = connection.bit_rate
+        if btr == 0:
+            mtx[A][B] = float('inf')
+            return float('inf')
+        mtx[A][B] -= btr
+        return mtx[A][B]
+
+
+######################################## Connection #######################################################
 
 class Connection(object):
     def __init__(self, input_node, output_node, signal_power):
