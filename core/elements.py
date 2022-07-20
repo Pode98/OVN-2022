@@ -85,6 +85,10 @@ class SignalInformation(object):
         self._path = path
         self._latency = 0
         self._noise_power = 0
+        #self._channel = channel
+        self._Rs = Rs
+        self._df = df
+
 
     @property
     def signal_power(self):
@@ -125,6 +129,14 @@ class SignalInformation(object):
 
     def next(self):
         self.path = self.path[1:]
+
+    @property
+    def Rs(self):
+        return self._Rs
+
+    @property
+    def df(self):
+        return self._df
 
 
 ########################################## Node ######################################################
@@ -209,13 +221,14 @@ class Line(object):
     def __init__(self, line_dict, num=10):
         self._label = line_dict['label']
         self._length = line_dict['length']
-        self._state = ['free'] * num
+        #self._state = ['free'] * int(num)
+        self._state = ['free'] * 10
         self._num_channels = num
         self._successive = {}
         self._gain = 16
         self._noise_figure = 3
         #self._noise_figure = 5 usare questo solo in lab8 es 9
-        self._n_amplifiers = int(np.cell(self._length / 80))
+        self._n_amplifiers = int(self._length / 80)
 
         # Pysical parameters of the fiber
         self._alpha = 0.2e-3
@@ -290,7 +303,10 @@ class Line(object):
 
     def noise_generation(self, lightpath):
         # noise = signal_power / (2 * self.length)
-        noise = self.ase_generation() + self.nli_generation(lightpath.signal_power, lightpath.df, lightpath.Rs)
+        signal_power = lightpath.signal_power
+        df = lightpath.df
+        rs = lightpath.Rs
+        noise = self.ase_generation() + self.nli_generation(signal_power, df, rs)
         return noise
 
     def propagate(self, lightpath, occupation=False):
@@ -308,7 +324,7 @@ class Line(object):
                       4 * self.alpha * self.beta * rs ** 3)
         signal_power = self.optimized_launch_power(eta)
         lightpath.set_signal_power(signal_power)
-        noise = self.noise_generation(signal_power)
+        noise = self.noise_generation(lightpath)
         lightpath.add_noise(noise)
 
         if occupation:
@@ -340,7 +356,7 @@ class Line(object):
     def ase_generation(self):
         gain_lin = 10 ** (self._gain / 10)
         noise_figure_lin = 10 ** (self._noise_figure / 10)
-        N = self._amplifiers
+        N = self.n_amplifiers
         f = 193.4e12
         h = Planck
         Bn = 12.5e9
@@ -461,9 +477,9 @@ class Network(object):
                     # calcolare eta ed effettuare l'optimized launch power
                     a = line.alpha / (20 * np.log10(np.e))
                     eta = 16 / (27 * np.pi) * np.log(
-                        np.pi ** 2 * line.beta * Rs ** 2 * 10 ** (2 * rs / df) / (2 * a)) * line.gamma ** 2 / (
+                        np.pi ** 2 * line.beta * Rs ** 2 * 10 ** (2 * Rs / df) / (2 * a)) * line.gamma ** 2 / (
                                   4 * a * line.beta * Rs ** 3)
-                    s_power = line.optimized_launch_power(line.eta_nli(signal_information.df, signal_information.Rs))
+                    s_power = line.optimized_launch_power(eta)
                 signal_information.set_signal_power(s_power)
 
                 signal_information = self.propagate(signal_information)  # dopo questo step avrò il signal coi valori finali
@@ -484,7 +500,7 @@ class Network(object):
         route_space = pd.DataFrame()
         route_space['path'] = paths
         num = self._num_channels
-        for i in range(num):
+        for i in range(int(num)):
             route_space[str(i)] = ['free'] * len(paths)
         self._route_space = route_space
 

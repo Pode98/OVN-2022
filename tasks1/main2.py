@@ -1,24 +1,19 @@
 from random import shuffle
+from random import shuffle
 import pandas as pd
 from core.elements1 import *
 import copy
-
-#from pathlib import Path
-#root = Path(__file__).parent
-#folder = str(root) + '\\resources'
-#file = str(folder) + '\\nodes.json'
-
-
+# used for the traffic matrix
 # used for the simulation of 100 connections with all the transceiver strategies
 def main():
-    network = Network('/Users/alessiopodesta/PycharmProjects/OVN-2022/resources/nodes_full_fixed_rate.json')
-    network_flex_rate = Network('/Users/alessiopodesta/PycharmProjects/OVN-2022/resources/nodes_full_flex_rate.json', 'flex_rate')
-    network_shannon = Network('/Users/alessiopodesta/PycharmProjects/OVN-2022/resources/nodes_full_flex_rate.json', 'shannon')
+    network = Network('/Users/alessiopodesta/PycharmProjects/OVN-2022/resources/nodes.json')
+    network_flex_rate = Network('/Users/alessiopodesta/PycharmProjects/OVN-2022/resources/nodes.json', 'flex_rate')
+    network_shannon = Network('/Users/alessiopodesta/PycharmProjects/OVN-2022/resources/nodes.json', 'shannon')
     node_labels = list(network.nodes.keys())
     connections = []
     for i in range(100):
         shuffle(node_labels)
-        connection = Connection(node_labels[0], node_labels[-1], 1)
+        connection = Connection(node_labels[0], node_labels[-1], 1e-3)
         connections.append(connection)
 
     connections1 = copy.deepcopy(connections)
@@ -29,8 +24,8 @@ def main():
     streamed_connections_fixed_rate = network.stream(connections1, best='snr')
 
     snrs = [connection.snr for connection in streamed_connections_fixed_rate]
-    #snrs_ = np.ma.masked_equal(snrs, 0)
-    plt.hist(snrs, bins=10)
+    snrs_ = np.ma.masked_equal(snrs, 0)
+    plt.hist(snrs_, bins=20)
 
     plt.title('SNR Distribution Full fixed-rate')
     plt.xlabel('dB')
@@ -38,8 +33,8 @@ def main():
     plt.show()
 
     bit_rate_fixed_rate = [connection.bit_rate for connection in streamed_connections_fixed_rate]
-    #brfr = np.ma.masked_equal(bit_rate_fixed_rate, 0)
-    plt.hist(bit_rate_fixed_rate, bins=10, label='fixed-rate')
+    brfr = np.ma.masked_equal(bit_rate_fixed_rate, 0)
+    plt.hist(brfr, bins, label='fixed-rate')
 
     plt.title('BitRate Full fixed-rate')
     plt.xlabel('Gbps')
@@ -97,29 +92,29 @@ def main():
     plt.title('BitRate Distribution')
     plt.xlabel('BitRate [Gbps]')
     plt.show()
- 
+    """""""""
     streamed_connections = network.stream(connections)
     latencies = [connection.latency for connection in streamed_connections_shannon]
     plt.hist(np.ma.masked_equal(latencies, 0), bins=25)
     plt.title('Latency Distribution')
-    plt.savefig('Plots/LatencyDistribution.png')
+    #plt.savefig('Plots/LatencyDistribution.png')
     plt.show()
     snrs=[connection.snr for connection in streamed_connections_shannon]
     plt.hist(np.ma.masked_equal(snrs, 0), bins=20)
     plt.title('SNR Dstribution')
-    plt.savefig('Plots/SNRDistribution.png')
+    #plt.savefig('Plots/SNRDistribution.png')
     plt.show()
-    """""""""
+
     # total capacity _________________________________________________________________________
 
-    # print("Average Latency: ", np.average(np.ma.masked_equal(latencies,0)))
-    print("Average SNR: ", np.average(np.ma.masked_equal(snrs, 0)))
+    print("Average Latency: ", np.average(np.ma.masked_equal(latencies,0)))
+    print("Average SNR: ", np.average(np.ma.masked_equal(snrs,0)))
     print("Total Capacity Fixed-Rate:", np.sum(bit_rate_fixed_rate))
-    print("Average Capacity Fixed-Rate:", np.mean(np.ma.masked_equal(bit_rate_fixed_rate, 0)))
+    print("Average Capacity Fixed-Rate:", np.mean(np.ma.masked_equal(bit_rate_fixed_rate,0)))
     print("Total Capacity Flex-Rate:", np.sum(bit_rate_flex_rate))
-    print("Average Capacity Flex-Rate:", np.mean(np.ma.masked_equal(bit_rate_flex_rate, 0)))
+    print("Average Capacity Flex-Rate:", np.mean(np.ma.masked_equal(bit_rate_flex_rate,0)))
     print("Total Capacity Shannon:", np.sum(bit_rate_shannon).round(2))
-    print("Average Capacity Shannon:", np.mean(np.ma.masked_equal(bit_rate_shannon, 0).round(2)))
+    print("Average Capacity Shannon:", np.mean(np.ma.masked_equal(bit_rate_shannon,0).round(2)))
 
 
 if __name__ == "__main__":

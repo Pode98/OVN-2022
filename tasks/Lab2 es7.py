@@ -1,7 +1,7 @@
 from random import shuffle
 from random import shuffle
 import pandas as pd
-from core.elements import *
+from core.elements1 import *
 
 #from pathlib import Path
 #root = Path(__file__).parent
@@ -12,7 +12,7 @@ network = Network('/Users/alessiopodesta/PycharmProjects/OVN-2022/resources/node
 network.connect()
 node_labels = list(network.nodes.keys())
 connections = []
-for i in range (1000):
+for i in range(100):
     shuffle(node_labels)
     connection = Connection(node_labels[0],node_labels[-1],1)
     connections.append(connection)

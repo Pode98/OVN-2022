@@ -1,32 +1,12 @@
 from random import shuffle
+from random import shuffle
+import pandas as pd
 from core.elements1 import *
-import copy
-
-
-# from pathlib import Path
-# root = Path(__file__).parent
-# folder = str(root) + '\\resources'
-# file = str(folder) + '\\nodes.json'
-
+# used for the traffic matrix
 def main():
     sat_percent = 95
     # fixed rate_____________________________________________________________________________
-    network = Network('/Users/alessiopodesta/PycharmProjects/OVN-2022/resources/nodes_full_fixed_rate.json')
-    #network_flex_rate = Network('/Users/alessiopodesta/PycharmProjects/OVN-2022/resources/nodes_full_flex_rate.json', 'flex_rate', 10)
-    #network_shannon = Network('/Users/alessiopodesta/PycharmProjects/OVN-2022/resources/nodes_full_flex_rate.json', 'shannon', 10)
-    node_labels = list(network.nodes.keys())
-    connections = []
-    for i in range(100):
-        shuffle(node_labels)
-        connection = Connection(node_labels[0], node_labels[-1], 1)
-        connections.append(connection)
-    """""""""
-    connections1 = copy.deepcopy(connections)
-    connections2 = copy.deepcopy(connections)
-    connections3 = copy.deepcopy(connections)
-    """""""""
-
-    bins = np.linspace(90, 700, 20)
+    network = Network('/Users/alessiopodesta/PycharmProjects/OVN-2022/resources/nodes.json')
     n_node = len(network.nodes.keys())
     saturationFix = []
     MsFix = []
@@ -61,14 +41,14 @@ def main():
         network.free_space()
     plt.plot(MsFix, saturationFix)
     plt.title('Saturation Fixed-Rate')
-    plt.savefig('Plots/M_fixed_rate.png')
+    #plt.savefig('Plots/M_fixed_rate.png')
     plt.xlabel('M')
     plt.ylabel('% of unsatisfied requests')
     plt.grid(linestyle='-', linewidth=0.5)
     plt.show()
 
     # flex rate_____________________________________________________________________________
-    network_flex_rate = Network('/Users/alessiopodesta/PycharmProjects/OVN-2022/resources/nodes_full_flex_rate.json', 'flex_rate', 10)
+    network_flex_rate = Network('/Users/alessiopodesta/PycharmProjects/OVN-2022/resources/nodes.json', 'flex_rate')
     n_node = len(network_flex_rate.nodes.keys())
     saturationflex = []
     Msflex = []
@@ -103,14 +83,14 @@ def main():
         network_flex_rate.free_space()
     plt.plot(Msflex, saturationflex)
     plt.title('Saturation Flex-Rate')
-    plt.savefig('Plots/M_flex_rate.png')
+    #plt.savefig('Plots/M_flex_rate.png')
     plt.xlabel('M')
     plt.ylabel('% of unsatisfied requests')
     plt.grid(linestyle='-', linewidth=0.5)
     plt.show()
 
     # shannon________________________________________________________________________________
-    network_shannon = Network('/Users/alessiopodesta/PycharmProjects/OVN-2022/resources/nodes_full_flex_rate.json', 'shannon', 10)
+    network_shannon = Network('/Users/alessiopodesta/PycharmProjects/OVN-2022/resources/nodes.json', 'shannon')
     n_node = len(network_shannon.nodes.keys())
     saturationshan = []
     Msshan = []
@@ -146,7 +126,7 @@ def main():
         network_shannon.free_space()
     plt.plot(Msshan, saturationshan)
     plt.title('Saturation Parameter Shannon')
-    plt.savefig('Plots/M_shannon.png')
+    #plt.savefig('Plots/M_shannon.png')
     plt.xlabel('M')
     plt.ylabel('% of unsatisfied requests')
     plt.grid(linestyle='-', linewidth=0.5)
@@ -159,7 +139,7 @@ def main():
     plt.grid(linestyle='-', linewidth=0.5)
     plt.legend(loc='lower right')
     plt.title('Saturation Parameter')
-    plt.savefig('Plots/M_all.png')
+    #plt.savefig('Plots/M_all.png')
     plt.show()
 
 
