@@ -4,7 +4,7 @@ import pandas as pd
 from core.elements1 import *
 import copy
 # used for the traffic matrix
-# used for the different values of beta2 and NF
+# used for the different values of beta and NF
 def main():
     network = Network('/Users/alessiopodesta/PycharmProjects/OVN-2022/resources/nodes.json')
     network_flex_rate = Network('/Users/alessiopodesta/PycharmProjects/OVN-2022/resources/nodes.json', 'flex_rate')

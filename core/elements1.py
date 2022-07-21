@@ -4,7 +4,6 @@ import matplotlib.pyplot as plt
 import itertools
 import random
 import pandas as pd
-import scipy as sp
 from scipy import special as math
 from scipy.constants import c
 from scipy.constants import Planck
@@ -14,6 +13,7 @@ BER_t = 1e-3
 Bn = 12.5e9  # noise bandwidth
 Rs = 32e9  # lightpath symbol rate
 df = 50e9  # lightpath frequency spacing betweer 2 channels
+
 
 class Lightpath(object):
     def __init__(self, power, path, channel):
@@ -81,10 +81,10 @@ class SignalInformation(Lightpath):
         self.Rs = 32.0e9
         self.df = 50.0e9
 
-    def increase_noise(self, value):
+    def add_noise(self, value):
         self._noise_power += value
 
-    def increase_latency(self, value):
+    def add_latency(self, value):
         self._latency += value
 
     def next(self):
@@ -106,11 +106,11 @@ class SignalInformation(Lightpath):
 
 class Node(object):
     def __init__(self, node):
-        self._label = node['label']  # string
-        self._position = node['position']  # tuple (float, float)
-        self._connected_nodes = node['connected_nodes']  # list [string]
-        self._successive = {}  # dict [Line]
-        self._switching_matrix = None
+        self._label = node['label']
+        self._position = node['position']  # tupla posizione matematica nello spazio (float, float)
+        self._connected_nodes = node['connected_nodes']  # lista di nodi connessi [string]
+        self._successive = {}  # dict di linee del nodo [Line]
+        self._switching_matrix = None # matrice contenente i bitrate per connessione da nodo a nodo
         self._transceiver = ''
 
     @property
@@ -149,8 +149,8 @@ class Node(object):
     def successive(self, value):
         self._successive = value
 
-    #  update a signal information object modifying its path attribute
-    #  and call the successive element  propagate method
+    #  aggiorno il segnale modificando il suo percorso e chiamo
+    #  il prossimo elemento da propagare
     def propagate(self, lightpath, occupation=False):
         path = lightpath.path  # signal information--> path
         if len(path) > 1:
@@ -160,18 +160,29 @@ class Node(object):
             lightpath = line.propagate(lightpath, occupation)
         return lightpath
 
+    #  aggiorno il segnale modificando il suo percorso e chiamo
+    #  il prossimo elemento da propagare (lab4, questo lo fa senza occupare i canali)
+    def probe(self, lightpath):
+        path = lightpath.path
+        if len(path) > 1:
+            line_label = path[:2]
+            line = self.successive[line_label]
+            lightpath.next()
+            lightpath = line.probe(lightpath)
+        return lightpath
+
 
 class Line(object):
     def __init__(self, line_dict):
         self._label = line_dict['label']
         self._length = line_dict['length']
-        self.successive = {}  # dict [Node]
+        self.successive = {}  # dict di nodi che succeddono alla linea [Node]
         self._state = ['free'] * 10
-        self._n_amplifiers = int(self._length / 80e3)  # one amp every 80km
+        self._n_amplifiers = int(self._length / 80e3)  # un amplificatore ogni 80km
         self._gain = 16
-        self._noise_figure = 3  # 5#
-        self.alpha = 0.2 * 0.001  # fiber loss dB/m
-        self.beta2 = 2.3e-26  # 0.6e-26  #
+        self._noise_figure = 3  # usare 5 solo per es 9 lab8#
+        self.alpha = 0.2e-3  # fiber loss dB/m
+        self.beta = 2.3e-26  # usare 0.6e-26 solo per es7 lab8 #
         self.gamma = 1.27e-3
 
     @property
@@ -210,19 +221,29 @@ class Line(object):
         return latency
 
     def noise_generation(self, lightpath):
-        # noise = 0.000000001 * signal_power * self._length  # 1e-9 * s_p * length
-
-        noise = self.ase_generation() + self.nli_generation(lightpath.signal_power, lightpath.df, lightpath.Rs)
-
+        # noise = signal_power / (2 * self.length) vecchia formula
+        signal_power = lightpath.signal_power
+        df = lightpath.df
+        rs = lightpath.Rs
+        noise = self.ase_generation() + self.nli_generation(signal_power, df, rs)
         return noise
 
     def propagate(self, lightpath, occupation=False):
+        # Calcolo latenza e aggiungo
         latency = self.latency_generation()
         lightpath.add_latency(latency)
-        sp = self.optimized_launch_power(self.eta_nli(lightpath.df, lightpath.Rs))
-        lightpath.set_signal_power(sp)
+        # Calcolo eta e calcolo del rumore
+        Nch = 10
+        rs = lightpath.Rs
+        Df = lightpath.df
+        eta = 16 / (27 * np.pi) * np.log(
+            np.pi ** 2 * self.beta * rs ** 2 * Nch ** (2 * rs / Df) / (2 * self.alpha)) * self.gamma ** 2 / (
+                      4 * self.alpha * self.beta * rs ** 3)
+        signal_power = self.optimized_launch_power(eta)
+        lightpath.set_signal_power(signal_power)
         noise = self.noise_generation(lightpath)
         lightpath.add_noise(noise)
+        # Verifico la disponibilità del canale e lo occupo
         if occupation:
             channel = lightpath.channel
             new_state = self.state.copy()
@@ -232,77 +253,83 @@ class Line(object):
         lightpath = node.propagate(lightpath, occupation)
         return lightpath
 
+    # Come prima, senza occupare i canali
+    def probe(self, lightpath):
+        # Update latency
+        latency = self.latency_generation()
+        lightpath.add_latency(latency)
+
+        # Update noise
+        signal_power = lightpath.signal_power
+        noise = self.noise_generation(signal_power)
+        lightpath.add_noise(noise)
+
+        node = self.successive[lightpath.path[0]]
+        lightpath = node.probe(lightpath)
+        return lightpath
+
     def ase_generation(self):
-        NF = 10 ** (self._noise_figure / 10)
-        G = 10 ** (self._gain / 10)
+        noise_fig = 10 ** (self._noise_figure / 10)
+        gain_lin = 10 ** (self._gain / 10)
         f = 193.414e12
         Bn = 12.5e9  # GHz
-        ASE = self.n_amplifiers * h * f * Bn * NF * (G - 1)
+        ASE = self.n_amplifiers * h * f * Bn * noise_fig * (gain_lin - 1)
         return ASE
 
-    def nli_generation(self, signal_power, dfp, Rsp):
-
-        Bn = 12.5e9  # GHz
-        eta_nli = self.eta_nli(dfp, Rsp)
-        nli = (signal_power ** 3) * eta_nli * self._n_amplifiers * Bn
-        return nli
-
-    def eta_nli(self, dfp, Rsp):
-        df = dfp
-        Rs = Rsp
+    def nli_generation(self, signal_power, Df,  rs):
+        Nch = 10 # per il momento, da implementare num_channels
+        Pch = signal_power
+        N_spans = self._n_amplifiers
+        b = self.beta
         a = self.alpha / (20 * np.log10(np.e))
-        Nch = 10
-        b2 = self.beta2
-        e_nli = 16 / (27 * np.pi) * np.log(
-            np.pi ** 2 * b2 * Rs ** 2 * Nch ** (2 * Rs / df) / (2 * a)) * self.gamma ** 2 / (
-                        4 * a * b2 * Rs ** 3)
+        eta = 16 / (27 * np.pi) * np.log(
+            np.pi ** 2 * b * rs ** 2 * Nch ** (2 * rs / Df) / (2 * a)) * self.gamma ** 2 / (
+                        4 * a * b * rs ** 3)
+        nli_noise = N_spans * Bn * (Pch**3) * eta
+        return nli_noise
 
-        return e_nli
-
-    def optimized_launch_power(self, eta):
+    def optimized_launch_power(self, eta): # ricontrollare
         F = 10 ** (self.noise_figure / 10)
         G = 10 ** (self.gain / 10)
         f0 = 193.414e12
         olp = ((F * f0 * h * G) / (2 * eta)) ** (1 / 3)
         return olp
 
-    BER_t = 1e-3
-
-    Bn = 12.5e9  # noise bandwidth
 
 class Network(object):
-    def __init__(self, json_path, transceiver='fixed_rate'):
-        # load the file in a json variable
+    def __init__(self, json_path, transceiver='fixed_rate', num = 10):
         nodes_json = json.load(open(json_path, 'r'))
-        # empty struct dict
         self.nodes = {}
         self.lines = {}
         self._weighted_paths = None
         self._connected = False
-        self._route_space = None
+        self._route_space = None  # dataframe che per ogni path descrive la disponibilità dei canali
+        self._num_channels = num  # da implementare, per gestire num di canali diverso da standard 10
 
-        # json file--> dict, load in dict node's label --> init Node
         for node_label in nodes_json:
             node_dict = nodes_json[node_label]
             node_dict['label'] = node_label
-
+            # Creo l'istanza del nodo
             node = Node(node_dict)
             self.nodes[node_label] = node
+
             if 'transceiver' not in nodes_json[node_label].keys():
+                # definisco la strategia leggendola o impostando lo standard
                 node.transceiver = transceiver
             else:
                 node.transceiver = nodes_json[node_label]['transceiver']
 
+            # Creo le istanze delle linee
             for connect_n_label in node_dict['connected_nodes']:
                 line_dict = {}
                 line_label = node_label + connect_n_label
                 line_dict['label'] = line_label
-                # starting node pos (x, y)
-                node_position = np.array(nodes_json[node_label]['position'])
 
-                # pos of the other node(x, y)
+                # Trovo le posizioni matematiche dei nodi
+                node_position = np.array(nodes_json[node_label]['position'])
                 connect_n_pos = np.array(nodes_json[connect_n_label]['position'])
 
+                # Calcolo della distanza
                 # length=sqrt((x1-x2)^2+(y1-y2)^2)
                 line_dict['length'] = np.sqrt(np.sum(node_position - connect_n_pos) ** 2)
 
@@ -327,24 +354,40 @@ class Network(object):
                 if label2 != label1:
                     all_couples.append(label1 + label2)
 
+        # Creo il Dataframe e definisco la struttura
+        columns = ['path', 'latency', 'noise', 'snr']
         df = pd.DataFrame()
         paths = []
         latencies = []
         noises = []
         snrs = []
+
         for couples in all_couples:
             for path in self.find_paths(couples[0], couples[1]):
                 path_str = ''
                 for node in path:
                     path_str += node + '-->'
                 paths.append(path_str[:-3])
+
+                # Ho costruito la prima parte del dataframe: per ogni coppia, guardo tutti i path possibili
+                # e per ogni path, riscrivo ogni nodo come mi è richiesto dall'es ovvero con nodo->next nodo
+
+                # ora propago
                 s_i = SignalInformation(s_power, path)
                 if couples in self.lines.keys():
                     line = self.lines[couples]
-                    s_power = line.optimized_launch_power(line.eta_nli(s_i.df, s_i.Rs))
+
+                    # calcolare eta ed effettuare l'optimized launch power
+                    a = line.alpha / (20 * np.log10(np.e))
+                    eta = 16 / (27 * np.pi) * np.log(
+                        np.pi ** 2 * line.beta * Rs ** 2 * 10 ** (2 * Rs / df) / (2 * a)) * line.gamma ** 2 / (
+                                  4 * a * line.beta * Rs ** 3)
+                    s_power = line.optimized_launch_power(eta)
                 s_i.set_signal_power(s_power)
 
-                s_i = self.propagate(s_i, occupation=False)
+                s_i = self.propagate(s_i, occupation=False)# dopo questo step avrò il signal coi valori finali
+                # Non mi resta che salvare i valori e passare al prossimo percorso
+                # ed una volta finito i percorsi, passare alla prossima coppia
                 latencies.append(s_i.getLatency())
                 noises.append(s_i.getNoisePower())
                 snrs.append(10 * np.log10(s_i.getSignalPower() / s_i.getNoisePower()))
@@ -355,34 +398,27 @@ class Network(object):
         df['snr'] = snrs
         self._weighted_paths = df
 
-        # set the route space free
+        # libero la route space
         route_space = pd.DataFrame()
         route_space['path'] = paths
-        for i in range(10):  # every line has 10 channel
+        num = 10
+        if self._num_channels:
+            num = self._num_channels
+        for i in range(num):  # standard 10
             route_space[str(i)] = ['free'] * len(paths)
         self._route_space = route_space
 
     def draw(self):
         nodes = self.nodes
-        font = {'family': 'serif',
-                'color': 'blue',
-                'weight': 'normal',
-                'size': 15
-                }
-        for node_label in nodes:
-            n0 = nodes[node_label]
-            x0 = n0.position[0] / 1e3
-            y0 = n0.position[1] / 1e3
-            plt.plot(x0, y0)
-
-            plt.text(x0, y0, node_label, fontdict=font)
-
-            for connect_n_label in n0.connected_nodes:
-                n1 = nodes[connect_n_label]
-                x1 = n1.position[0] / 1e3
-                y1 = n1.position[1] / 1e3
-                plt.plot([x0, x1], [y0, y1])
-        plt.xlabel('Km')
+        for node_lable in nodes:
+            n0 = nodes[node_lable]
+            x0 = n0.position[0]
+            y0 = n0.position[1]
+            for connected_node in n0.connected_nodes:
+                n1 = nodes[connected_node]
+                x1 = n1.position[0]
+                y1 = n1.position[1]
+                plt.plot([x0, x1], [y0, y1], 'b')
         plt.title('Network')
         plt.show()
 
@@ -399,6 +435,8 @@ class Network(object):
 
         cross_lines = self.lines.keys()
         inner_paths = {'0': label1}
+        # Prendo tutte le chiavi escluse quelle dei nodi che mi sono stati dati in input
+        # ovvero prendo tutti i possibili nodi di passaggio
         for i in range(len(cross_nodes) + 1):
             inner_paths[str(i + 1)] = []
             for inner_path in inner_paths[str(i)]:
@@ -417,30 +455,38 @@ class Network(object):
         return paths
 
     def find_best_snr(self, in_node, out_node):
+        # all_paths = self.weighted_paths.path.values
         available_path = self.available_path(in_node, out_node)
         if available_path:
             inout_df = self.weighted_paths.loc[
                 self.weighted_paths.path.isin(available_path)]
             best_snr = np.max(inout_df.snr.values)
-            best_path = inout_df.loc[
-                inout_df.snr == best_snr].path.values[0]
+            # best_path = inout_df.loc[inout_df.snr == best_snr].path.values[0].replace('->', '')
+            best_path = inout_df.loc[ inout_df.snr == best_snr].path.values[0]
         else:
             best_path = None
+        # inout_paths = [path for path in all_paths
+        #      if ((path[0] == input_node) and (path[-1] == output_node))]
+        # inout_df = self.weighted_paths.loc[self.weighted_paths.path.isin(inout_paths)]
+        # best_snr = np.max(inout_df.snr.values)
+        # best_path = inout_df.loc[inout_df.snr == best_snr].path.values[0].replace('->', '')
         return best_path
 
     def find_best_latency(self, in_node, out_node):
+        # all_paths = self.weighted_paths.path.values
         available_path = self.available_path(in_node, out_node)
         if available_path:
-            inout_df = self.weighted_paths.loc[
-                self.weighted_paths.path.isin(available_path)]
+            # inout_paths = [path for path in all_paths
+            #      if ((path[0] == input_node) and (path[-1] == output_node))]
+            inout_df = self.weighted_paths.loc[self.weighted_paths.path.isin(available_path)]
             best_latency = np.min(inout_df.latency.values)
-            best_path = inout_df.loc[
-                inout_df.latency == best_latency].path.values[0]
+            # best_path = inout_df.loc[inout_df.latency == best_latency].path.values[0].replace('->', '')
+            best_path = inout_df.loc[inout_df.latency == best_latency].path.values[0]
         else:
             best_path = None
         return best_path
 
-    # connect the network --> dict
+    # da ricontrollare funzionamento matrice
     def connect(self):
         nodes_dict = self.nodes
         lines_dict = self.lines
@@ -467,17 +513,25 @@ class Network(object):
 
     def propagate(self, lightpath, occupation=False):
         path = lightpath.path
-        first_node = self.nodes[path[0]]
-        prop_s_i = first_node.propagate(lightpath, occupation)
-        return prop_s_i
+        start = self.nodes[path[0]]
+        propagated_lightpath = start.propagate(lightpath, occupation)
+        return propagated_lightpath
 
-    #  for each element of connections set the attribute latency or snr (latency by default)
+    # come sopra ma senza occupare
+    def probe(self, lightpath):
+        path = lightpath.path
+        start = self.nodes[path[0]]
+        propagated_lightpath = start.probe(lightpath)
+        return propagated_lightpath
+
+    #  per ogni elemento della connessione imposto l'attributo della latenza o del snr
     def stream(self, connections, best='latency'):
         streamed_connections = []
         for connection in connections:
             in_node = connection.in_node
             out_node = connection.out_node
             sig_power = connection.signal_power
+            # self.set_weighted_paths(signal_power)
             if best == 'latency':
                 path = self.find_best_latency(in_node, out_node)
             elif best == 'snr':
@@ -486,20 +540,22 @@ class Network(object):
                 print('ERROR INPUT VALUE:', best)
                 continue
             if path:
-                path_occupancy = self.route_space.loc[
-                                     self.route_space.path == path].T.values[1:]
-                channel = [i for i in range(len(path_occupancy))
-                           if path_occupancy[i] == 'free'][0]
+                path_occupancy = self.route_space.loc[self.route_space.path == path].T.values[1:]
+                # prendo la disponibilità di tutti i canali di quel path
+                channel = [i for i in range(len(path_occupancy)) if path_occupancy[i] == 'free'][0]
+                # Prendo il primo canale disponibile di quel path
+
                 lightpath = Lightpath(sig_power, path, channel)
                 rb = self.calculate_bit_rate(lightpath, self.nodes[in_node].transceiver)
                 if rb == 0:
                     continue
                 else:
                     connection.bit_rate = rb
-                path_occupancy = self.route_space.loc[
-                                     self.route_space.path == path].T.values[1:]
-                channel = [i for i in range(len(path_occupancy))
-                           if path_occupancy[i] == 'free'][0]
+
+                # ridondanza da ricontrollare
+                path_occupancy = self.route_space.loc[self.route_space.path == path].T.values[1:]
+                channel = [i for i in range(len(path_occupancy)) if path_occupancy[i] == 'free'][0]
+
                 path = path.replace('-->', '')
                 in_lightpath = Lightpath(sig_power, path, channel)
                 out_lightpath = self.propagate(in_lightpath, True)
@@ -534,8 +590,7 @@ class Network(object):
                 return path
 
     def update_route_space(self, path, channel):
-        all_paths = [self.path_to_line_set(p)
-                     for p in self.route_space.path.values]
+        all_paths = [self.path_to_line_set(p) for p in self.route_space.path.values]
         states = self.route_space[str(channel)]
         lines = self.path_to_line_set(path)
         for i in range(len(all_paths)):
@@ -549,9 +604,7 @@ class Network(object):
                     if j not in (0, len(path_to_update) - 1):
                         if ((path_to_update[j - 1] in self.nodes[path_to_update[j]].connected_nodes) & (
                                 path_to_update[j + 1] in self.nodes[path_to_update[j]].connected_nodes)):
-                            self.nodes[path_to_update[j]].switching_matrix[path_to_update[j - 1]][
-                                path_to_update[j + 1]][
-                                channel] = 0
+                            self.nodes[path_to_update[j]].switching_matrix[path_to_update[j - 1]][path_to_update[j + 1]][channel] = 0
 
         self.route_space[str(channel)] = states
 
@@ -568,6 +621,7 @@ class Network(object):
                 available_path.append(path)
             return available_path
 
+    # def calculate_bit_rate(self, path, strategy):
     def calculate_bit_rate(self, lightpath, strategy):
         global BER_t
         Rs = lightpath.Rs
